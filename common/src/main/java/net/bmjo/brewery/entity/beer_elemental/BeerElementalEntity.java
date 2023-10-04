@@ -1,10 +1,8 @@
 package net.bmjo.brewery.entity.beer_elemental;
 
+import net.bmjo.brewery.entity.beer_elemental_barrel.BeerElementalAttackEntity;
 import net.bmjo.brewery.sound.SoundRegistry;
 import net.minecraft.core.particles.ParticleTypes;
-import net.minecraft.network.syncher.EntityDataAccessor;
-import net.minecraft.network.syncher.EntityDataSerializers;
-import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.damagesource.DamageSource;
@@ -12,11 +10,15 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.entity.monster.Blaze;
+import net.minecraft.world.entity.ai.goal.*;
+import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
+import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.pathfinder.BlockPathTypes;
 import net.minecraft.world.phys.Vec3;
+
+import java.util.EnumSet;
 
 /*
  * IMPORTANT: Moved to extending Monster rather than Blaze due to being unable to avoid the creation of smoke particles
@@ -34,7 +36,13 @@ public class BeerElementalEntity extends Monster {
 
     @Override
     protected void registerGoals() {
-        super.registerGoals();
+        this.targetSelector.addGoal(1, new HurtByTargetGoal(this).setAlertOthers());
+        this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Player.class, true));
+        this.goalSelector.addGoal(3, new BeerElementalAttackGoal(this));
+        this.goalSelector.addGoal(4, new MoveTowardsRestrictionGoal(this, 1.0D));
+        this.goalSelector.addGoal(5, new WaterAvoidingRandomStrollGoal(this, 1.0D, 0.0F));
+        this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0F));
+        this.goalSelector.addGoal(6, new RandomLookAroundGoal(this));
     }
 
     @Override
@@ -107,4 +115,104 @@ public class BeerElementalEntity extends Monster {
     }
 
 
+
+    private static class BeerElementalAttackGoal extends Goal {
+        private final BeerElementalEntity elemental;
+        private int attackStep;
+        private int attackTime;
+        private int lastSeen;
+
+        public BeerElementalAttackGoal(BeerElementalEntity elemental) {
+            this.elemental = elemental;
+            setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
+        }
+
+        @Override
+        public boolean canUse() {
+            LivingEntity target = elemental.getTarget();
+            return target != null && target.isAlive() && elemental.canAttack(target);
+        }
+
+        @Override
+        public void start() {
+            attackStep = 0;
+        }
+
+        @Override
+        public void stop() {
+            lastSeen = 0;
+        }
+
+        @Override
+        public void tick() {
+            attackTime--;
+
+            LivingEntity target = elemental.getTarget();
+            if (target == null)
+                return;
+
+            boolean canSee = elemental.getSensing().hasLineOfSight(target);
+            lastSeen = canSee ? 0 : lastSeen + 1;
+
+            double dist = elemental.distanceToSqr(target);
+            double range = getFollowDistance() * getFollowDistance();
+            if (dist < 4.0D) { // If within 2 blocks, do a melee attack on target.
+                if (!canSee)
+                    return;
+
+                if (attackTime <= 0.0D) {
+                    attackTime = 20;
+                    elemental.doHurtTarget(target);
+                }
+                elemental.getMoveControl().setWantedPosition(target.getX(), target.getY(), target.getZ(), 1.0D); // Move towards target.
+
+            } else if (dist < range && canSee) { // Else if within follow range & with line of sight, try ranged attack.
+                if (attackTime <= 0) {
+                    attackStep++;
+
+                    if (attackStep == 1)
+                        attackTime = 60;
+                    else if (attackStep <= 4)
+                        attackTime = 6;
+                    else {
+                        attackTime = 100;
+                        attackStep = 0;
+                    }
+
+                    if (attackStep > 1) {
+                        if (!elemental.isSilent())
+                            elemental.level.levelEvent(null, 1018, elemental.blockPosition(), 0);
+
+                        // Displacement vector pointing from the center of elemental to the center of target.
+                        double dX = target.getX() - elemental.getX();
+                        double dY = target.getY(0.5D) - elemental.getY(0.5D);
+                        double dZ = target.getZ() - elemental.getZ();
+
+                        double f = Math.sqrt(Math.sqrt(dist)) * 0.5D;
+
+                        for (int i = 0; i < 1; ++i) {
+                            BeerElementalAttackEntity attack = new BeerElementalAttackEntity(elemental.level, elemental, elemental.getRandom().triangle(dX, 2.297D * f), dY, elemental.getRandom().triangle(dZ, 2.297D * f));
+                            attack.setPos(attack.getX(), elemental.getY(0.5D) + 0.5D, attack.getZ());
+                            elemental.level.addFreshEntity(attack);
+                        }
+                    }
+                }
+                elemental.getLookControl().setLookAt(target, 10.0F, 10.0F);
+            }
+            else if (lastSeen < 5)
+                elemental.getMoveControl().setWantedPosition(target.getX(), target.getY(), target.getZ(), 1.0D);
+
+            super.tick();
+        }
+
+        private double getFollowDistance() {
+            return elemental.getAttributeValue(Attributes.FOLLOW_RANGE);
+        }
+
+        @Override
+        public boolean requiresUpdateEveryTick() {
+            return true;
+        }
+
+    }
 }

@@ -9,7 +9,6 @@ import net.minecraft.client.model.geom.PartPose;
 import net.minecraft.client.model.geom.builders.*;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
-import net.minecraft.world.entity.monster.Blaze;
 import net.minecraft.world.entity.monster.Monster;
 
 import java.util.Arrays;
@@ -128,36 +127,34 @@ public class BeerElementalModel<T extends Monster> extends EntityModel<T> {
 
     @Override
     public void setupAnim(T entity, float limbSwing, float limbSwingAmount, float age, float headYaw, float headPitch) {
-        float toRad = Mth.PI / 180.0F; // for converting degrees to radians.
-
         // f is a multiplier for the rotation of the upper body parts, it gets inverted on each "layer" of parts.
         float f = age * Mth.PI * -0.1F; // Starts at 0 degrees, 0.05 revolutions per second.
         for(int i = 0; i < 4; ++i) {
             upperBodyParts[i].y = Mth.cos((i * 2.0F + age) * 0.25F) - 2.0F; // Y values on the outer rings move in a scaled cos wave, offset by their height on the model.
             upperBodyParts[i].x = Mth.cos(f) * 9.0F; // xz essentially just giving them a point f times around the circle.
             upperBodyParts[i].z = Mth.sin(f) * 9.0F;
-            f += 90 * toRad; // The parts are spaced 90 degrees from each other
+            f += 90 * Mth.DEG_TO_RAD; // The parts are spaced 90 degrees from each other
         }
 
-        f = age * Mth.PI * 0.03F + 45 * toRad; // Starts at 45 degrees, 0.015 revolutions per second.
+        f = age * Mth.PI * 0.03F + 45 * Mth.DEG_TO_RAD; // Starts at 45 degrees, 0.015 revolutions per second.
         for(int i = 4; i < 8; ++i) {
             upperBodyParts[i].y = Mth.cos((i * 2.0F + age) * 0.25F) + 2.0F;
             upperBodyParts[i].x = Mth.cos(f) * 7.0F;
             upperBodyParts[i].z = Mth.sin(f) * 7.0F;
-            f += 90 * toRad;
+            f += 90 * Mth.DEG_TO_RAD;
         }
 
 
-        f = age * Mth.PI * -0.05F + 27 * toRad; // Starts at 27 degrees, 0.025 revolutions per second.
+        f = age * Mth.PI * -0.05F + 27 * Mth.DEG_TO_RAD; // Starts at 27 degrees, 0.025 revolutions per second.
         for(int i = 8; i < 12; ++i) {
             upperBodyParts[i].y = Mth.cos((i * 1.5F + age) * 0.5F) + 11.0F;
             upperBodyParts[i].x = Mth.cos(f) * 5.0F;
             upperBodyParts[i].z = Mth.sin(f) * 5.0F;
-            f += 90 * toRad;
+            f += 90 * Mth.DEG_TO_RAD;
         }
         // Make head look in correct direction.
-        this.Head.yRot = headYaw * toRad;
-        this.Head.xRot = headPitch * toRad;
+        this.Head.yRot = headYaw * Mth.DEG_TO_RAD;
+        this.Head.xRot = headPitch * Mth.DEG_TO_RAD;
     }
 
     @Override
