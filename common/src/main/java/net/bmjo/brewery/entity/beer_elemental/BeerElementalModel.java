@@ -8,12 +8,19 @@ import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.model.geom.PartPose;
 import net.minecraft.client.model.geom.builders.*;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.monster.Blaze;
+import net.minecraft.world.entity.monster.Monster;
+
+import java.util.Arrays;
 
 import static net.bmjo.brewery.Brewery.MOD_ID;
 
-public class BeerElementalModel<T extends Blaze> extends EntityModel<T> {
+public class BeerElementalModel<T extends Monster> extends EntityModel<T> {
+
     public static final ModelLayerLocation BEER_ELEMENTAL_MODEL_LAYER = new ModelLayerLocation(new ResourceLocation(MOD_ID, "beer_elemental"), "main");
+    private final ModelPart[] upperBodyParts; // Using array here as it's far more convenient to animate-- should populate itself with the other ModelParts anyway
+
     private final ModelPart upperBodyParts0;
     private final ModelPart upperBodyParts1;
     private final ModelPart upperBodyParts2;
@@ -42,6 +49,9 @@ public class BeerElementalModel<T extends Blaze> extends EntityModel<T> {
         this.upperBodyParts10 = root.getChild("upperBodyParts10");
         this.upperBodyParts11 = root.getChild("upperBodyParts11");
         this.Head = root.getChild("Head");
+
+        upperBodyParts = new ModelPart[12];
+        Arrays.setAll(this.upperBodyParts, i -> root.getChild(getPartName(i)));
     }
 
     public static LayerDefinition createBodyLayer() {
@@ -112,9 +122,42 @@ public class BeerElementalModel<T extends Blaze> extends EntityModel<T> {
         return LayerDefinition.create(meshdefinition, 64, 32);
     }
 
-    @Override
-    public void setupAnim(T entity, float limbSwing, float limbSwingAmount, float ageInTicks, float netHeadYaw, float headPitch) {
+    private static String getPartName(int i) {
+        return "upperBodyParts" + i;
+    }
 
+    @Override
+    public void setupAnim(T entity, float limbSwing, float limbSwingAmount, float age, float headYaw, float headPitch) {
+        float toRad = Mth.PI / 180.0F; // for converting degrees to radians.
+
+        // f is a multiplier for the rotation of the upper body parts, it gets inverted on each "layer" of parts.
+        float f = age * Mth.PI * -0.1F; // Starts at 0 degrees, 0.05 revolutions per second.
+        for(int i = 0; i < 4; ++i) {
+            upperBodyParts[i].y = Mth.cos((i * 2.0F + age) * 0.25F) - 2.0F; // Y values on the outer rings move in a scaled cos wave, offset by their height on the model.
+            upperBodyParts[i].x = Mth.cos(f) * 9.0F; // xz essentially just giving them a point f times around the circle.
+            upperBodyParts[i].z = Mth.sin(f) * 9.0F;
+            f += 90 * toRad; // The parts are spaced 90 degrees from each other
+        }
+
+        f = age * Mth.PI * 0.03F + 45 * toRad; // Starts at 45 degrees, 0.015 revolutions per second.
+        for(int i = 4; i < 8; ++i) {
+            upperBodyParts[i].y = Mth.cos((i * 2.0F + age) * 0.25F) + 2.0F;
+            upperBodyParts[i].x = Mth.cos(f) * 7.0F;
+            upperBodyParts[i].z = Mth.sin(f) * 7.0F;
+            f += 90 * toRad;
+        }
+
+
+        f = age * Mth.PI * -0.05F + 27 * toRad; // Starts at 27 degrees, 0.025 revolutions per second.
+        for(int i = 8; i < 12; ++i) {
+            upperBodyParts[i].y = Mth.cos((i * 1.5F + age) * 0.5F) + 11.0F;
+            upperBodyParts[i].x = Mth.cos(f) * 5.0F;
+            upperBodyParts[i].z = Mth.sin(f) * 5.0F;
+            f += 90 * toRad;
+        }
+        // Make head look in correct direction.
+        this.Head.yRot = headYaw * toRad;
+        this.Head.xRot = headPitch * toRad;
     }
 
     @Override
